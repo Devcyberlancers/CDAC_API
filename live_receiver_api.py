@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import copy
 import json
 import os
 import time
@@ -41,6 +42,7 @@ API_PORT = env_int("API_PORT", 18081)
 
 ACK = env_bool("ACK", True)
 USE_SAMPLE_DATA = env_bool("USE_SAMPLE_DATA", True)
+APP_VERSION = "2026-04-30-dynamic-sample"
 
 
 def now_ms() -> int:
@@ -105,7 +107,32 @@ def set_latest(obj: dict, peer: str, source: str = "live"):
 
 def ensure_sample_data():
     if USE_SAMPLE_DATA and (not LATEST["ok"] or LATEST["last"] is None):
-        set_latest(SAMPLE_PAYLOAD, "built-in-sample", source="sample")
+        set_latest(build_sample_payload(0), "built-in-sample", source="sample")
+
+
+def build_sample_payload(step: int) -> Dict[str, Any]:
+    payload = copy.deepcopy(SAMPLE_PAYLOAD)
+    payload["tank"]["level"] = round(72.5 + ((step % 7) - 3) * 1.2, 2)
+    payload["tank"]["motor"] = step % 2 == 0
+    payload["tank"]["rain"] = step % 3 == 0
+
+    for index, field_name in enumerate(sorted(payload["fields"].keys()), start=1):
+        field = payload["fields"][field_name]
+        field["water_level"] = round(field["water_level"] + ((step + index) % 5) * 0.4, 2)
+        field["moisture"] = round(max(65.0, 100.0 - ((step + index) % 6) * 3.5), 2)
+        field["ph"] = round(7.0 + (((step + index) % 5) - 2) * 0.08, 2)
+        field["irrigation"] = (step + index) % 2 == 0
+
+    payload["npk"]["ts"] = now_ms()
+    payload["npk"]["data"]["N"] = 20 + (step % 6)
+    payload["npk"]["data"]["P"] = step % 4
+    payload["npk"]["data"]["K"] = 50 + ((step * 3) % 10)
+    return payload
+
+
+def refresh_sample_data():
+    if LATEST["source"] == "sample":
+        set_latest(build_sample_payload(LATEST["count"]), "built-in-sample", source="sample")
 
 
 def request_peer(request: Request) -> str:
@@ -184,6 +211,7 @@ def empty_water_response() -> Dict[str, Any]:
 
 @app.get("/health")
 def health():
+    refresh_sample_data()
     age_ms = None
     if LATEST["received_at_ms"] is not None:
         age_ms = now_ms() - LATEST["received_at_ms"]
@@ -191,6 +219,7 @@ def health():
     return JSONResponse({
         "ok": True,
         "service": "live-receiver-api",
+        "version": APP_VERSION,
         "api_listen": f"{API_HOST}:{API_PORT}",
         "has_live_data": LATEST["source"] == "live",
         "has_sample_data": LATEST["source"] == "sample",
@@ -221,6 +250,7 @@ async def ingest(request: Request):
 
 @app.get("/state")
 def state():
+    refresh_sample_data()
     # returns the last JSON received from the data source
     if not LATEST["ok"] or LATEST["last"] is None:
         return JSONResponse(empty_state_response())
@@ -230,6 +260,7 @@ def state():
 
 @app.get("/water")
 def water():
+    refresh_sample_data()
     if not LATEST["ok"] or LATEST["last"] is None:
         return JSONResponse(empty_water_response())
 
@@ -260,6 +291,7 @@ def water():
 
 @app.get("/meta")
 def meta():
+    refresh_sample_data()
     return JSONResponse(LATEST)
 
 

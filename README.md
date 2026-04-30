@@ -35,7 +35,7 @@ By default, the API starts with built-in sample data already loaded.
 
 That means a fresh local startup will immediately return sample values from `/state` and `/water`.
 
-While the API is still using built-in sample mode, each API read refreshes the sample values so repeated calls show changing data.
+While the API is still using built-in sample mode, the sample values refresh every few seconds. Repeated reads inside that interval return the same values; reads after the interval return updated values.
 
 When real live data arrives through TCP or `POST /ingest`, it replaces the sample payload in memory.
 
@@ -59,8 +59,9 @@ Example `GET /health` response with built-in sample data:
 {
   "ok": true,
   "service": "live-receiver-api",
-  "version": "2026-04-30-dynamic-sample",
+  "version": "2026-04-30-timed-sample",
   "api_listen": "127.0.0.1:18081",
+  "sample_refresh_seconds": 3,
   "has_live_data": false,
   "has_sample_data": true,
   "data_source": "sample"
@@ -90,6 +91,18 @@ Example `GET /state` response:
       "water_level": 5.0,
       "moisture": 100.0,
       "ph": 7.38,
+      "irrigation": true
+    },
+    "f3": {
+      "water_level": 4.2,
+      "moisture": 98.0,
+      "ph": 7.21,
+      "irrigation": false
+    },
+    "f4": {
+      "water_level": 3.7,
+      "moisture": 95.0,
+      "ph": 7.12,
       "irrigation": true
     }
   },
@@ -126,6 +139,16 @@ Example `GET /water` response:
     "f2": {
       "water_level": 5.0,
       "moisture": 100.0,
+      "irrigation": true
+    },
+    "f3": {
+      "water_level": 4.2,
+      "moisture": 98.0,
+      "irrigation": false
+    },
+    "f4": {
+      "water_level": 3.7,
+      "moisture": 95.0,
       "irrigation": true
     }
   },
@@ -188,6 +211,7 @@ Linux:
 curl http://127.0.0.1:18081/health
 curl http://127.0.0.1:18081/state
 curl http://127.0.0.1:18081/water
+sleep 4
 curl http://127.0.0.1:18081/state
 curl -X POST http://127.0.0.1:18081/ingest -H "Content-Type: application/json" -d '{"tank":{"name":"main","level":72.5}}'
 curl http://127.0.0.1:18081/health
@@ -201,6 +225,7 @@ Windows PowerShell:
 Invoke-RestMethod http://127.0.0.1:18081/health
 Invoke-RestMethod http://127.0.0.1:18081/state
 Invoke-RestMethod http://127.0.0.1:18081/water
+Start-Sleep -Seconds 4
 Invoke-RestMethod http://127.0.0.1:18081/state
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:18081/ingest -ContentType "application/json" -Body '{"tank":{"name":"main","level":72.5}}'
 Invoke-RestMethod http://127.0.0.1:18081/health
@@ -213,5 +238,5 @@ Invoke-RestMethod http://127.0.0.1:18081/meta
 - The API is intended to be consumed locally by applications, scripts, or dashboards.
 - The latest received payload is kept in memory.
 - Built-in sample data is loaded by default on startup.
-- Built-in sample values change on each API read until real live data replaces them.
+- Built-in sample values refresh every few seconds until real live data replaces them.
 - Real live data replaces the sample payload automatically.

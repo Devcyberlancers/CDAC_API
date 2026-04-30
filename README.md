@@ -7,6 +7,7 @@ The main requirement is simple:
 - client applications should read data using the API
 - the API should work locally on a laptop or desktop
 - the API should still respond cleanly even when no live data has arrived yet
+- a fresh clone should show built-in sample data immediately
 
 ## Local API
 
@@ -28,38 +29,38 @@ Available endpoints:
 
 ## Behavior When No Data Is Available
 
-The API continues to work even if no live data has been received yet.
+The API continues to work even if no external live data has been received yet.
 
-In that case:
+By default, the API starts with built-in sample data already loaded.
 
-- `/health` returns API status with `has_live_data: false`
-- `/state` returns an empty default response
-- `/water` returns an empty default response
+That means a fresh local startup will immediately return sample values from `/state` and `/water`.
 
-Example `GET /state` response before data arrives:
+When real live data arrives through TCP or `POST /ingest`, it replaces the sample payload in memory.
 
-```json
-{
-  "ok": false,
-  "last": {},
-  "message": "no live data received yet",
-  "received_at": null,
-  "peer": null,
-  "received_count": 0
-}
+`GET /health` shows which mode is active:
+
+- `data_source: "sample"` means built-in sample data is active
+- `data_source: "live"` means real incoming data has replaced the sample
+- `has_sample_data` and `has_live_data` indicate the current state
+
+If you want to disable built-in sample data and return empty responses until real data arrives:
+
+```bash
+export USE_SAMPLE_DATA=false
 ```
 
-Example `GET /water` response before data arrives:
+Then restart the service.
+
+Example `GET /health` response with built-in sample data:
 
 ```json
 {
-  "ok": false,
-  "tank": {},
-  "fields": {},
-  "message": "no live data received yet",
-  "received_at": null,
-  "peer": null,
-  "received_count": 0
+  "ok": true,
+  "service": "live-receiver-api",
+  "api_listen": "127.0.0.1:18081",
+  "has_live_data": false,
+  "has_sample_data": true,
+  "data_source": "sample"
 }
 ```
 
@@ -126,8 +127,9 @@ Example `GET /water` response:
     }
   },
   "received_at": "2026-04-30T12:00:00Z",
-  "peer": "127.0.0.1:50000",
-  "received_count": 12
+  "peer": "built-in-sample",
+  "received_count": 1,
+  "source": "sample"
 }
 ```
 
@@ -147,6 +149,11 @@ Then read it back:
 curl http://127.0.0.1:18081/state
 curl http://127.0.0.1:18081/water
 ```
+
+After posting live data, `GET /health` should show:
+
+- `has_live_data: true`
+- `data_source: "live"`
 
 ## Run Locally On Linux
 
@@ -176,9 +183,11 @@ Linux:
 
 ```bash
 curl http://127.0.0.1:18081/health
-curl -X POST http://127.0.0.1:18081/ingest -H "Content-Type: application/json" -d '{"tank":{"name":"main","level":72.5}}'
 curl http://127.0.0.1:18081/state
 curl http://127.0.0.1:18081/water
+curl -X POST http://127.0.0.1:18081/ingest -H "Content-Type: application/json" -d '{"tank":{"name":"main","level":72.5}}'
+curl http://127.0.0.1:18081/health
+curl http://127.0.0.1:18081/state
 curl http://127.0.0.1:18081/meta
 ```
 
@@ -186,9 +195,11 @@ Windows PowerShell:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:18081/health
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:18081/ingest -ContentType "application/json" -Body '{"tank":{"name":"main","level":72.5}}'
 Invoke-RestMethod http://127.0.0.1:18081/state
 Invoke-RestMethod http://127.0.0.1:18081/water
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:18081/ingest -ContentType "application/json" -Body '{"tank":{"name":"main","level":72.5}}'
+Invoke-RestMethod http://127.0.0.1:18081/health
+Invoke-RestMethod http://127.0.0.1:18081/state
 Invoke-RestMethod http://127.0.0.1:18081/meta
 ```
 
@@ -196,4 +207,5 @@ Invoke-RestMethod http://127.0.0.1:18081/meta
 
 - The API is intended to be consumed locally by applications, scripts, or dashboards.
 - The latest received payload is kept in memory.
-- The API remains available even before the first live message arrives.
+- Built-in sample data is loaded by default on startup.
+- Real live data replaces the sample payload automatically.

@@ -1,17 +1,17 @@
 # HPC Integration Documentation
 
-## Agriculture Digital Twin - Raspberry Pi to HPC Architecture
+## Water Monitoring Digital Twin - Raspberry Pi to HPC Architecture
 
 ## 1. Introduction
 
-This document describes the architecture, deployment, and operational workflow of the Real-Time Agriculture Digital Twin System, where:
+This document describes the architecture, deployment, and operational workflow of the Real-Time Water Monitoring Digital Twin System, where:
 
 - IoT sensor data is generated at the edge using ESP32 and Raspberry Pi.
 - Data is aggregated on the Raspberry Pi and pushed to an HPC Virtual Machine.
-- The HPC side consumes live data for analytics and simulation using Python.
+- The HPC side consumes live data for water monitoring, analytics, and simulation using Python.
 - No persistent storage is required; only the latest live state is kept in memory and exposed through a live API.
 
-This integration enables real-time monitoring, modeling, and AI-driven analysis using High Performance Computing (HPC).
+This integration enables real-time monitoring, hydraulic state tracking, modeling, and AI-driven analysis using High Performance Computing (HPC).
 
 The same receiver can also be deployed on a laptop or desktop system for development, demo, or non-HPC runtime use. Supported deployment targets are:
 
@@ -28,7 +28,7 @@ ESP32 Sensors
   ->
 MQTT (ESP32 -> Node-RED on Raspberry Pi)
   ->
-Raspberry Pi Aggregator (converts MQTT topics -> "Unity-like" JSON state)
+Raspberry Pi Aggregator (converts MQTT topics -> water-oriented live JSON state)
   ->
 TCP Push (Raspberry Pi -> HPC VM on Port 42321)
   ->
@@ -36,7 +36,7 @@ HPC Live Receiver (in-memory latest state)
   ->
 Local API on HPC (127.0.0.1:18081)
   ->
-HPC Python Analysis / Simulation scripts consume API (/state)
+HPC Python analysis, monitoring, or simulation scripts consume API (/water or /state)
 ```
 
 ### HPC Live Receiver Architecture
@@ -55,9 +55,9 @@ HPC Python Analysis / Simulation scripts consume API (/state)
 
 | Endpoint | Purpose |
 | --- | --- |
+| `/water` | Water-focused live summary for quick validation |
 | `/health` | System health status |
 | `/state` | Latest live JSON state |
-| `/water` | Water-focused live summary for quick validation |
 
 ## 3. Raspberry Pi Setup (Files + Services)
 
@@ -70,7 +70,7 @@ On the Raspberry Pi, the main component is:
 It performs the following functions:
 
 - Subscribes to MQTT topics published from Node-RED and ESP32
-- Builds the unified JSON format containing tank status, fields `f1` to `f4` with `moisture`, `ph`, and `water_level`, and the `npk` sensor block
+- Builds the unified JSON format containing tank status, field water levels, irrigation state, and optional soil and NPK data
 - Pushes the unified JSON to the HPC VM on TCP port `42321`
 - Optionally exposes a local API on the Pi if needed
 
@@ -131,7 +131,7 @@ sudo journalctl -u ws-aggregator -f
 
 ## 4. Data Model (Unified Payload)
 
-The system transmits JSON payload in a Unity-like state format.
+The system transmits JSON payload in a live state format. In this branch, the deployment focus is water monitoring, while preserving compatibility with the full payload structure used by the edge system.
 
 ### Example Payload
 
@@ -212,12 +212,13 @@ On HPC, the main component is:
 It performs the following:
 
 - Receives TCP pushes on port `42321`
-- Maintains the latest state in RAM
+- Maintains the latest water state in RAM
 - Exposes a local-only API for scripts on `http://127.0.0.1:18081`
+- Provides `http://127.0.0.1:18081/water`
 - Provides `http://127.0.0.1:18081/health`
 - Provides `http://127.0.0.1:18081/state`
 
-This ensures live access without requiring disk storage.
+This ensures live water-state access without requiring disk storage.
 
 ### 5.2 HPC Project Path
 
@@ -478,7 +479,7 @@ Returns receiver status, including:
 
 ### `/state`
 
-Returns the latest live JSON state from memory:
+Returns the latest live JSON state from memory, including water data and any additional field metadata:
 
 ```bash
 curl http://127.0.0.1:18081/state
@@ -486,7 +487,7 @@ curl http://127.0.0.1:18081/state
 
 ### `/water`
 
-Returns a compact water-focused snapshot derived from the latest state. This is useful for quick verification of tank level and field water levels.
+Returns a compact water-focused snapshot derived from the latest state. This is the primary quick-check endpoint for validating tank level, field water level, and irrigation status.
 
 ### `/meta`
 

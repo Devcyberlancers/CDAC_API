@@ -107,7 +107,30 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 # -----------------------------
 # FastAPI
 # -----------------------------
-app = FastAPI(title="HPC Live Receiver API")
+app = FastAPI(title="Live Data API")
+
+
+def empty_state_response() -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "last": {},
+        "message": "no live data received yet",
+        "received_at": None,
+        "peer": None,
+        "received_count": LATEST["count"],
+    }
+
+
+def empty_water_response() -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "tank": {},
+        "fields": {},
+        "message": "no live data received yet",
+        "received_at": None,
+        "peer": None,
+        "received_count": LATEST["count"],
+    }
 
 @app.get("/health")
 def health():
@@ -117,8 +140,9 @@ def health():
 
     return JSONResponse({
         "ok": True,
-        "tcp_listen": f"{TCP_LISTEN_HOST}:{TCP_LISTEN_PORT}",
+        "service": "live-receiver-api",
         "api_listen": f"{API_HOST}:{API_PORT}",
+        "has_live_data": LATEST["ok"] and LATEST["last"] is not None,
         "received_count": LATEST["count"],
         "last_age_ms": age_ms,
         "peer": LATEST["peer"],
@@ -128,9 +152,9 @@ def health():
 
 @app.get("/state")
 def state():
-    # returns the last JSON received from the Raspberry Pi
+    # returns the last JSON received from the data source
     if not LATEST["ok"] or LATEST["last"] is None:
-        return JSONResponse({"ok": False, "reason": "no data received yet"}, status_code=503)
+        return JSONResponse(empty_state_response())
 
     return JSONResponse(LATEST["last"])
 
@@ -138,7 +162,7 @@ def state():
 @app.get("/water")
 def water():
     if not LATEST["ok"] or LATEST["last"] is None:
-        return JSONResponse({"ok": False, "reason": "no data received yet"}, status_code=503)
+        return JSONResponse(empty_water_response())
 
     latest = LATEST["last"]
     tank = latest.get("tank")

@@ -42,7 +42,8 @@ API_PORT = env_int("API_PORT", 18081)
 
 ACK = env_bool("ACK", True)
 USE_SAMPLE_DATA = env_bool("USE_SAMPLE_DATA", True)
-APP_VERSION = "2026-04-30-dynamic-sample"
+SAMPLE_REFRESH_SECONDS = env_int("SAMPLE_REFRESH_SECONDS", 3)
+APP_VERSION = "2026-04-30-timed-sample"
 
 
 def now_ms() -> int:
@@ -78,6 +79,18 @@ SAMPLE_PAYLOAD: Dict[str, Any] = {
             "water_level": 5.0,
             "moisture": 100.0,
             "ph": 7.38,
+            "irrigation": True,
+        },
+        "f3": {
+            "water_level": 4.2,
+            "moisture": 98.0,
+            "ph": 7.21,
+            "irrigation": False,
+        },
+        "f4": {
+            "water_level": 3.7,
+            "moisture": 95.0,
+            "ph": 7.12,
             "irrigation": True,
         },
     },
@@ -131,7 +144,15 @@ def build_sample_payload(step: int) -> Dict[str, Any]:
 
 
 def refresh_sample_data():
-    if LATEST["source"] == "sample":
+    if LATEST["source"] != "sample":
+        return
+
+    last_ms = LATEST["received_at_ms"]
+    if last_ms is None:
+        set_latest(build_sample_payload(LATEST["count"]), "built-in-sample", source="sample")
+        return
+
+    if now_ms() - last_ms >= SAMPLE_REFRESH_SECONDS * 1000:
         set_latest(build_sample_payload(LATEST["count"]), "built-in-sample", source="sample")
 
 
@@ -221,6 +242,7 @@ def health():
         "service": "live-receiver-api",
         "version": APP_VERSION,
         "api_listen": f"{API_HOST}:{API_PORT}",
+        "sample_refresh_seconds": SAMPLE_REFRESH_SECONDS,
         "has_live_data": LATEST["source"] == "live",
         "has_sample_data": LATEST["source"] == "sample",
         "data_source": LATEST["source"],

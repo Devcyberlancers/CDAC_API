@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import uvicorn
 
@@ -65,6 +65,13 @@ def set_latest(obj: dict, peer: str):
     LATEST["peer"] = peer
     LATEST["error"] = None
     LATEST["count"] += 1
+
+
+def request_peer(request: Request) -> str:
+    client = request.client
+    if client is None:
+        return "local-api"
+    return f"{client.host}:{client.port}"
 
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -147,6 +154,23 @@ def health():
         "last_age_ms": age_ms,
         "peer": LATEST["peer"],
         "error": LATEST["error"],
+    })
+
+
+@app.post("/ingest")
+async def ingest(request: Request):
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            {"ok": False, "message": "payload must be a JSON object"},
+            status_code=400,
+        )
+
+    set_latest(payload, request_peer(request))
+    return JSONResponse({
+        "ok": True,
+        "message": "payload accepted",
+        "received_count": LATEST["count"],
     })
 
 

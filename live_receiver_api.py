@@ -36,7 +36,7 @@ TCP_LISTEN_HOST = env_str("TCP_LISTEN_HOST", "0.0.0.0")
 TCP_LISTEN_PORT = env_int("TCP_LISTEN_PORT", 42321)
 
 API_HOST = env_str("API_HOST", "127.0.0.1")
-API_PORT = env_int("API_PORT", 18080)
+API_PORT = env_int("API_PORT", 18081)
 # For LAN access, set API_HOST=0.0.0.0 and open the firewall.
 
 ACK = env_bool("ACK", True)
@@ -133,6 +133,35 @@ def state():
         return JSONResponse({"ok": False, "reason": "no data received yet"}, status_code=503)
 
     return JSONResponse(LATEST["last"])
+
+
+@app.get("/water")
+def water():
+    if not LATEST["ok"] or LATEST["last"] is None:
+        return JSONResponse({"ok": False, "reason": "no data received yet"}, status_code=503)
+
+    latest = LATEST["last"]
+    tank = latest.get("tank")
+    fields = latest.get("fields", {})
+    field_levels = {}
+
+    if isinstance(fields, dict):
+        for name, value in fields.items():
+            if isinstance(value, dict):
+                field_levels[name] = {
+                    "water_level": value.get("water_level"),
+                    "moisture": value.get("moisture"),
+                    "irrigation": value.get("irrigation"),
+                }
+
+    return JSONResponse({
+        "ok": True,
+        "tank": tank,
+        "fields": field_levels,
+        "received_at": LATEST["received_at"],
+        "peer": LATEST["peer"],
+        "received_count": LATEST["count"],
+    })
 
 
 @app.get("/meta")

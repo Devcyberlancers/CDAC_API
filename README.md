@@ -21,6 +21,7 @@ Available endpoints:
 | Endpoint | Purpose |
 | --- | --- |
 | `/health` | API status |
+| `/ingest` | Submit a JSON payload directly to the API |
 | `/state` | Latest full JSON payload |
 | `/water` | Water-focused view of the latest payload |
 | `/meta` | Internal metadata such as timestamps and counters |
@@ -130,6 +131,23 @@ Example `GET /water` response:
 }
 ```
 
+## Local Data Injection
+
+If you are testing on a local machine and no external device is pushing data yet, send data directly to the API:
+
+```bash
+curl -X POST http://127.0.0.1:18081/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"tank":{"name":"main","level":72.5,"motor":false,"rain":false},"fields":{"f1":{"water_level":2.4,"moisture":100.0,"ph":7.38,"irrigation":true},"f2":{"water_level":5.0,"moisture":100.0,"ph":7.38,"irrigation":true}}}'
+```
+
+Then read it back:
+
+```bash
+curl http://127.0.0.1:18081/state
+curl http://127.0.0.1:18081/water
+```
+
 ## Run Locally On Linux
 
 ```bash
@@ -158,6 +176,7 @@ Linux:
 
 ```bash
 curl http://127.0.0.1:18081/health
+curl -X POST http://127.0.0.1:18081/ingest -H "Content-Type: application/json" -d '{"tank":{"name":"main","level":72.5}}'
 curl http://127.0.0.1:18081/state
 curl http://127.0.0.1:18081/water
 curl http://127.0.0.1:18081/meta
@@ -167,6 +186,7 @@ Windows PowerShell:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:18081/health
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:18081/ingest -ContentType "application/json" -Body '{"tank":{"name":"main","level":72.5}}'
 Invoke-RestMethod http://127.0.0.1:18081/state
 Invoke-RestMethod http://127.0.0.1:18081/water
 Invoke-RestMethod http://127.0.0.1:18081/meta

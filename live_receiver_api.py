@@ -40,6 +40,7 @@ API_PORT = env_int("API_PORT", 18081)
 # For LAN access, set API_HOST=0.0.0.0 and open the firewall.
 
 ACK = env_bool("ACK", True)
+USE_SAMPLE_DATA = env_bool("USE_SAMPLE_DATA", True)
 
 
 def now_ms() -> int:
@@ -54,17 +55,57 @@ LATEST: Dict[str, Any] = {
     "peer": None,
     "error": None,
     "count": 0,
+    "source": None,
+}
+
+SAMPLE_PAYLOAD: Dict[str, Any] = {
+    "tank": {
+        "name": "main",
+        "level": 72.5,
+        "motor": False,
+        "rain": False,
+    },
+    "fields": {
+        "f1": {
+            "water_level": 2.4,
+            "moisture": 100.0,
+            "ph": 7.38,
+            "irrigation": True,
+        },
+        "f2": {
+            "water_level": 5.0,
+            "moisture": 100.0,
+            "ph": 7.38,
+            "irrigation": True,
+        },
+    },
+    "npk": {
+        "type": "nob",
+        "field": "f2",
+        "ts": 1772200983554,
+        "data": {
+            "N": 22,
+            "P": 0,
+            "K": 55,
+        },
+    },
 }
 
 
-def set_latest(obj: dict, peer: str):
+def set_latest(obj: dict, peer: str, source: str = "live"):
     LATEST["ok"] = True
     LATEST["last"] = obj
     LATEST["received_at"] = datetime.utcnow().isoformat() + "Z"
     LATEST["received_at_ms"] = now_ms()
     LATEST["peer"] = peer
     LATEST["error"] = None
+    LATEST["source"] = source
     LATEST["count"] += 1
+
+
+def ensure_sample_data():
+    if USE_SAMPLE_DATA and (not LATEST["ok"] or LATEST["last"] is None):
+        set_latest(SAMPLE_PAYLOAD, "built-in-sample", source="sample")
 
 
 def request_peer(request: Request) -> str:
@@ -125,6 +166,7 @@ def empty_state_response() -> Dict[str, Any]:
         "received_at": None,
         "peer": None,
         "received_count": LATEST["count"],
+        "source": None,
     }
 
 
@@ -137,6 +179,7 @@ def empty_water_response() -> Dict[str, Any]:
         "received_at": None,
         "peer": None,
         "received_count": LATEST["count"],
+        "source": None,
     }
 
 @app.get("/health")
@@ -149,7 +192,9 @@ def health():
         "ok": True,
         "service": "live-receiver-api",
         "api_listen": f"{API_HOST}:{API_PORT}",
-        "has_live_data": LATEST["ok"] and LATEST["last"] is not None,
+        "has_live_data": LATEST["source"] == "live",
+        "has_sample_data": LATEST["source"] == "sample",
+        "data_source": LATEST["source"],
         "received_count": LATEST["count"],
         "last_age_ms": age_ms,
         "peer": LATEST["peer"],
@@ -166,7 +211,7 @@ async def ingest(request: Request):
             status_code=400,
         )
 
-    set_latest(payload, request_peer(request))
+    set_latest(payload, request_peer(request), source="live")
     return JSONResponse({
         "ok": True,
         "message": "payload accepted",
@@ -209,6 +254,7 @@ def water():
         "received_at": LATEST["received_at"],
         "peer": LATEST["peer"],
         "received_count": LATEST["count"],
+        "source": LATEST["source"],
     })
 
 
@@ -218,6 +264,7 @@ def meta():
 
 
 async def main():
+    ensure_sample_data()
     # Bind the TCP receiver before starting the API so startup fails cleanly.
     tcp_server = await asyncio.start_server(handle_client, TCP_LISTEN_HOST, TCP_LISTEN_PORT)
     tcp_task = asyncio.create_task(tcp_server.serve_forever())
